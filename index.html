@@ -675,10 +675,12 @@ function build(){
 function resumeAudio(){
   if(!actx){try{actx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return}}
   if(actx.state!=='running'){
-    // iOS unlock: play a silent buffer in user gesture to unblock audio pipeline
-    try{var b=actx.createBuffer(1,1,actx.sampleRate),s=actx.createBufferSource();s.buffer=b;s.connect(actx.destination);s.start(0)}catch(e){}
+    // iOS unlock: start a silent oscillator inside this user gesture to unblock audio
+    try{var o=actx.createOscillator(),g=actx.createGain();g.gain.value=0;o.connect(g);g.connect(actx.destination);o.start(0);o.stop(actx.currentTime+0.5)}catch(e){}
     actx.resume().catch(function(){});
   }
+  // Auto-start music once context is running (catches deferred iOS unlock on next gesture)
+  if(musicOn&&actx.state==='running'&&!musicGain){initMusic();if(musicGain)playBlaydon();}
 }
 // Seagull sound using Web Audio API
 function gullCry(){
@@ -2013,24 +2015,10 @@ function cw(){if(nb>=7&&ue.size>=8){setTimeout(function(){document.getElementByI
 
 function startGame(){
   if(go)return;
-  // ---- iOS Audio Unlock (MUST happen before DOM changes) ----
-  if(!actx){try{actx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}
-  if(actx){
-    // Play silent buffer to unlock iOS Safari audio pipeline (must be in user gesture)
-    try{var b=actx.createBuffer(1,1,actx.sampleRate),s=actx.createBufferSource();s.buffer=b;s.connect(actx.destination);s.start(0)}catch(e){}
-    actx.resume().catch(function(){});
-  }
-  // ---- Update DOM ----
   document.getElementById('start').style.display='none';
   document.getElementById('hud').style.display='flex';
   musicOn=true;
-  // Start music once AudioContext is confirmed running
-  var musicStarted=false;
-  function beginMusic(){if(musicStarted)return;musicStarted=true;initMusic();if(musicGain)playBlaydon();}
-  if(actx&&actx.state==='running'){beginMusic();}
-  if(actx&&!musicStarted){actx.onstatechange=function(){if(actx.state==='running'&&musicOn)beginMusic()};}
-  function tryMusic(){if(musicStarted)return;if(actx&&actx.state==='running')beginMusic();else setTimeout(tryMusic,150);}
-  setTimeout(tryMusic,150);
+  resumeAudio(); // creates context + tries unlock + starts music if context is already running
   go=true;clk.start();hud();msg('Welcome to Cheveley Park! Explore and find Toby the dog! &#128054;',3500);
 }
 init();anim();
