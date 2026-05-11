@@ -671,10 +671,14 @@ function build(){
   });
 }
 
+// Audio unlock — called on EVERY user interaction (iOS needs repeated resume attempts)
+function resumeAudio(){
+  if(!actx){try{actx=new(window.AudioContext||window.webkitAudioContext)}catch(e){return}}
+  if(actx.state!=='running')actx.resume().catch(function(){});
+}
 // Seagull sound using Web Audio API
 function gullCry(){
-  if(!actx)try{actx=new(window.AudioContext||window.webkitAudioContext)}catch(e){return}
-  if(actx.state==='suspended')actx.resume();
+  if(!actx||actx.state!=='running')return;
   // Descending screech
   var o=actx.createOscillator(),g=actx.createGain();
   o.connect(g);g.connect(actx.destination);
@@ -710,7 +714,7 @@ function initMusic(){
   musicGain=actx.createGain();musicGain.connect(actx.destination);musicGain.gain.value=1;
 }
 function playTone(midi,start,dur,wave,vol){
-  if(!actx||!musicGain)return;
+  if(!actx||actx.state!=='running'||!musicGain)return;
   var freq=440*Math.pow(2,(midi-69)/12);
   var o=actx.createOscillator(),g=actx.createGain();
   o.type=wave;o.frequency.value=freq;
@@ -723,7 +727,7 @@ function playTone(midi,start,dur,wave,vol){
 }
 // Flute-like tone: sine wave, slow breath attack, gentle 5Hz vibrato
 function playFlute(midi,start,dur,vol){
-  if(!actx||!musicGain)return;
+  if(!actx||actx.state!=='running'||!musicGain)return;
   var freq=440*Math.pow(2,(midi-69)/12);
   var o=actx.createOscillator(),g=actx.createGain();
   o.type='sine';o.frequency.value=freq;
@@ -825,9 +829,9 @@ function playBlaydon(){
   setTimeout(function(){if(musicOn&&musicGen===gen)playBlaydon()},loopTime*1000-50);
 }
 function toggleMusic(){
+  resumeAudio();
   if(!musicOn){
     musicOn=true;musicGen++;
-    if(actx&&actx.state==='suspended')actx.resume();
     initMusic();playBlaydon();
     document.getElementById('muteBtn').textContent='🎵 ON';
   } else {
@@ -1154,7 +1158,7 @@ function throwStick(){
 }
 
 function mobileKick(){
-  K[' ']=true;setTimeout(function(){K[' ']=false},150);
+  resumeAudio();K[' ']=true;setTimeout(function(){K[' ']=false},150);
 }
 function stickTap(dir){
   if(tobyState!=='throwing'||stickPhase!=='mash')return;
@@ -1216,7 +1220,7 @@ var INTS=[
   ['rocker',-22.8,3.5, 2.0,  'the spring rocker',   'rocker', 5]
 ];
 function playDanzaBeat(){
-  if(!danzaOn||!actx)return;
+  if(!danzaOn||!actx||actx.state!=='running')return;
   var gen=danzaGen,now=actx.currentTime;
   var bpm=128,q=60/bpm,s=q/2; // quarter, eighth
   // Lower Blaydon while disco plays
@@ -1299,7 +1303,7 @@ function updatePrompt(){
     if('ontouchstart' in window){btn.style.display='block';btn.textContent='USE '+n[4].toUpperCase()}
   }
 }
-function tapUse(){var n=findNearestInt();if(n)startAct(n);}
+function tapUse(){resumeAudio();var n=findNearestInt();if(n)startAct(n);}
 function startAct(int){
   if(act)return;
   act=int[5];actT=0;actDur=int[6];
@@ -1755,6 +1759,7 @@ function init(){
   cT=Math.PI/2; // Camera looking east
 
   window.addEventListener('keydown',function(e){
+    resumeAudio();
     K[e.key]=true;if(e.key===' ')e.preventDefault();
     // E key: enter or exit a park interactive
     if(e.key==='e'||e.key==='E'){
@@ -1767,14 +1772,14 @@ function init(){
   var oM=function(x,y){if(!md)return;cT-=(x-mx0)*.005;cP=Math.max(.1,Math.min(1.3,cP+(y-my0)*.005));mx0=x;my0=y};
   ren.domElement.addEventListener('mousedown',function(e){oD(e.clientX,e.clientY)});
   window.addEventListener('mouseup',oU);window.addEventListener('mousemove',function(e){oM(e.clientX,e.clientY)});
-  ren.domElement.addEventListener('touchstart',function(e){e.preventDefault();camDrag=true;oD(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
+  ren.domElement.addEventListener('touchstart',function(e){resumeAudio();e.preventDefault();camDrag=true;oD(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
   window.addEventListener('touchend',oU);
   window.addEventListener('touchmove',function(e){if(camDrag){e.preventDefault();oM(e.touches[0].clientX,e.touches[0].clientY)}},{passive:false});
   window.addEventListener('wheel',function(e){cD=Math.max(3,Math.min(18,cD+e.deltaY*.01))});
   window.addEventListener('resize',function(){cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();ren.setSize(innerWidth,innerHeight)});
   if('ontouchstart' in window){document.getElementById('dpad').style.display='block';
     document.querySelectorAll('#dpad button').forEach(function(b){var k=b.dataset.k;
-      b.addEventListener('touchstart',function(e){e.preventDefault();e.stopPropagation();K[k]=true},{passive:false});
+      b.addEventListener('touchstart',function(e){resumeAudio();e.preventDefault();e.stopPropagation();K[k]=true},{passive:false});
       b.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();K[k]=false},{passive:false})})}
   ren.render(scene,cam)}
 
@@ -1998,26 +2003,12 @@ function cw(){if(nb>=7&&ue.size>=8){setTimeout(function(){document.getElementByI
     c.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);scene.add(c)}},800)}}
 
 function startGame(){document.getElementById('start').style.display='none';document.getElementById('hud').style.display='flex';
-  try{actx=new(window.AudioContext||window.webkitAudioContext)}catch(e){}
-  if(actx){
-    // iOS Safari unlock: play silent buffer + oscillator during user gesture
-    var buf=actx.createBuffer(1,44100,44100);
-    var src=actx.createBufferSource();src.buffer=buf;src.connect(actx.destination);src.start(0);
-    var osc=actx.createOscillator();var gn=actx.createGain();
-    gn.gain.value=0;osc.connect(gn);gn.connect(actx.destination);
-    osc.start(0);osc.stop(actx.currentTime+0.05);
-    actx.resume();
-    // Poll until AudioContext is running, then start music
-    var started=false;
-    function beginMusic(){
-      if(started)return;started=true;
-      musicOn=true;initMusic();playBlaydon();
-    }
-    var poll=setInterval(function(){
-      if(actx.state==='running'){clearInterval(poll);beginMusic();}
-    },50);
-    setTimeout(function(){clearInterval(poll);beginMusic();},3000);
-  }
+  resumeAudio();
+  musicOn=true;initMusic();
+  // Retry music start until AudioContext is running (iOS may need a moment)
+  var musicStarted=false;
+  function tryMusic(){if(musicStarted)return;if(actx&&actx.state==='running'){musicStarted=true;playBlaydon();}else{setTimeout(tryMusic,100);}}
+  tryMusic();
   go=true;clk.start();hud();msg('Welcome to Cheveley Park! Explore and find Toby the dog! &#128054;',3500);
   }
 init();anim();
