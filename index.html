@@ -83,6 +83,9 @@ pointer-events:none;line-height:1.4;max-width:90%}
 padding:14px 30px;font-size:18px;background:#e84545;color:#fff;border:none;
 border-radius:12px;font-weight:700;display:none;z-index:25;
 box-shadow:0 4px 14px rgba(232,69,69,.5)}
+#stopBtn{position:fixed;bottom:16px;right:16px;width:64px;height:64px;border:none;
+border-radius:50%;background:rgba(232,69,69,.7);color:#fff;font-size:13px;
+font-weight:700;display:none;z-index:25}
 </style></head><body>
 <div id="start">
 <h1>&#9917; <span class="nt">CHEVELEY PARK</span> &#9917;</h1>
@@ -114,10 +117,11 @@ Collect all the <b>&#9917; footballs</b> and discover the equipment!<br><br>
 <div id="timerBar"><div id="timerFill"></div></div>
 </div>
 <div id="stickKeys" style="display:none">
-<div class="keyHint" id="keyL">&#9664;</div>
-<div style="font-size:14px;color:#888">mash!</div>
-<div class="keyHint" id="keyR">&#9654;</div>
+<div class="keyHint" id="keyL" ontouchstart="stickTap('left')">&#9664;</div>
+<div style="font-size:14px;color:#888">tap!</div>
+<div class="keyHint" id="keyR" ontouchstart="stickTap('right')">&#9654;</div>
 </div>
+<button id="throwBtn" onclick="throwStick()" style="display:none;margin-top:12px;padding:14px 36px;font-size:18px;font-weight:700;border:none;border-radius:12px;background:#e84545;color:#fff">THROW!</button>
 <div id="stickResult"></div>
 <div id="stickDist"></div>
 </div>
@@ -146,6 +150,7 @@ Collect all the <b>&#9917; footballs</b> and discover the equipment!<br><br>
 <button onclick="dismissFinalScore(true)" style="margin-top:10px;padding:10px 30px;font-size:16px;font-weight:600;border:none;border-radius:10px;background:#555;color:#fff;cursor:pointer">Leave</button>
 </div>
 <button id="useBtn" onclick="tapUse()">USE</button>
+<button id="stopBtn" onclick="endAct()">STOP</button>
 <div id="win"><h1>&#127881; CHEVELEY PARK &#127881;</h1>
 <p>You explored the whole of Cheveley Park!</p>
 <p>&#128021; Toby: Woof woof! Best birthday ever!</p>
@@ -1108,6 +1113,7 @@ function startStickGame(){
     document.getElementById('powerPct').textContent='0%';
     document.getElementById('timerFill').style.width='100%';
     stickPhase='mash';stickTimer=4;
+    if('ontouchstart' in window)document.getElementById('throwBtn').style.display='block';
   },3200);
 }
 function throwStick(){
@@ -1130,6 +1136,7 @@ function throwStick(){
   stickTarget.z=player.position.z+Math.cos(dir)*dist;
   stickObj.position.set(player.position.x,1.5,player.position.z);
   stickObj.visible=true;stickFly=0;
+  document.getElementById('throwBtn').style.display='none';
   // Close overlay immediately so you can watch
   setTimeout(function(){
     document.getElementById('stickGame').style.display='none';
@@ -1137,6 +1144,22 @@ function throwStick(){
   },600);
 }
 
+function stickTap(dir){
+  if(tobyState!=='throwing'||stickPhase!=='mash')return;
+  if(dir==='left'&&stickLastKey!=='left'){
+    stickPower+=5;stickLastKey='left';
+    document.getElementById('keyL').classList.add('active');
+    document.getElementById('keyR').classList.remove('active');
+  }
+  if(dir==='right'&&stickLastKey!=='right'){
+    stickPower+=5;stickLastKey='right';
+    document.getElementById('keyR').classList.add('active');
+    document.getElementById('keyL').classList.remove('active');
+  }
+  var pct=Math.min(100,Math.round(stickPower));
+  document.getElementById('powerFill').style.width=pct+'%';
+  document.getElementById('powerPct').textContent=pct+'%';
+}
 // Stick game key handler
 window.addEventListener('keydown',function(e){
   if(tobyState==='throwing'&&stickPhase==='mash'){
@@ -1292,7 +1315,8 @@ function startAct(int){
   document.getElementById('prompt').style.display='none';
   var btn=document.getElementById('useBtn');if(btn)btn.style.display='none';
   var ah=document.getElementById('actHud'),htm='';
-  if(act==='goal'){htm='&#9917; Watch the ball — <b>SPACE</b> to volley! <b>E</b> to leave.';
+  var mob='ontouchstart' in window;
+  if(act==='goal'){htm='&#9917; Watch the ball — <b>'+(mob?'&#11014;':'SPACE')+'</b> to volley!'+(mob?'':' <b>E</b> to leave.');
     player.position.set(-2.2,0,-12.9);player.rotation.y=-Math.PI/2;
     mkVolleyGoal();
     // FIFA-style camera: behind and above Player
@@ -1308,18 +1332,19 @@ function startAct(int){
     var sc2=document.getElementById('shotCount');if(sc2)sc2.textContent='0';
     var gh=document.getElementById('goalHud');if(gh)gh.style.display='block';
     setTimeout(function(){if(act==='goal')spawnVolleyBall();},800);}
-  else if(act==='zip'){htm='&#127950; Alternate <b>A</b> and <b>D</b> to pump and fly!';}
-  else if(act==='swing'){htm='&#127904; Press <b>SPACE</b> to swing higher! <b>E</b> to stop.';}
+  else if(act==='zip'){htm='&#127950; Alternate <b>'+(mob?'&#9664; / &#9654;':'A / D')+'</b> to pump and fly!';}
+  else if(act==='swing'){htm='&#127904; '+(mob?'Tap <b>&#11014;</b>':'Press <b>SPACE</b>')+' to swing higher!'+(mob?'':' <b>E</b> to stop.');}
   else if(act==='spin'){
-    htm='&#127881; DISCO TIME! <b>E</b> to stop.';startDisco();
+    htm='&#127881; DISCO TIME!'+(mob?'':' <b>E</b> to stop.');startDisco();
   }
-  else if(act==='maypole'){htm='&#127905; DISCO TIME! <b>E</b> to stop.';startDisco();}
+  else if(act==='maypole'){htm='&#127905; DISCO TIME!'+(mob?'':' <b>E</b> to stop.');startDisco();}
   else if(act==='climb'){htm='&#129495; Climbing!';}
   else if(act==='gym'){
     var gymName={rower:'ROWING',abbench:'CRUNCHES',xtrainer:'STEPPING'}[int[0]]||'REPS';
-    htm='&#128170; Press <b>UP/DOWN</b> to do '+gymName+'! 10 reps = big muscles!';}
-  else if(act==='rocker'){htm='&#128012; Boing boing! <b>E</b> to stop.';}
+    htm='&#128170; '+(mob?'Tap <b>&#9650; / &#9660;</b>':'Press <b>UP/DOWN</b>')+' to do '+gymName+'! 10 reps = big muscles!';}
+  else if(act==='rocker'){htm='&#128012; Boing boing!'+(mob?'':' <b>E</b> to stop.');}
   ah.innerHTML=htm;ah.style.display='block';
+  if(mob)document.getElementById('stopBtn').style.display='block';
   // Toby cheers from the sidelines
   if(toby&&Math.random()<.6)setTimeout(function(){msg('&#128054; Toby: Woof! Go on!',1800)},800);
 }
@@ -1337,6 +1362,7 @@ function endAct(){
   player.children[12].position.set(.12,.27,0);player.children[12].rotation.x=0;
   player.children[13].position.set(-.12,.04,.02);player.children[13].rotation.x=0;
   player.children[14].position.set(.12,.04,.02);player.children[14].rotation.x=0;
+  var sb=document.getElementById('stopBtn');if(sb)sb.style.display='none';
   if(actData.swGroup){scene.remove(actData.swGroup);actData.swGroup=null;}
   // Reset swing seat and chains to rest position
   var ss=swingSeats[actData.id];
@@ -1953,6 +1979,7 @@ function cw(){if(nb>=7&&ue.size>=8){setTimeout(function(){document.getElementByI
 
 function startGame(){document.getElementById('start').style.display='none';document.getElementById('hud').style.display='flex';
   try{actx=new(window.AudioContext||window.webkitAudioContext)}catch(e){}
+  if(actx&&actx.state==='suspended')actx.resume();
   musicOn=true;initMusic();setTimeout(playBlaydon,500);
   go=true;clk.start();hud();msg('Welcome to Cheveley Park! Explore and find Toby the dog! &#128054;',3500);
   }
