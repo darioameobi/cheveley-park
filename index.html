@@ -102,7 +102,7 @@ Collect all the <b>&#9917; footballs</b> and discover the equipment!<br><br>
 &#127918; <b>Arrow keys / WASD</b> = Move &nbsp; <b>Space</b> = Jump<br>
 &#128433; <b>Drag</b> = Look &nbsp; <b>Scroll</b> = Zoom
 </div>
-<button onclick="startGame()">&#9654; PLAY</button>
+<button id="playBtn" style="touch-action:manipulation">&#9654; PLAY</button>
 </div>
 <div id="hud"><div class="hi">&#9917; <span id="bc">0</span>/7</div><div class="hi">&#11088; <span id="sc">0</span></div><div class="hi">&#127919; <span id="ec">0</span>/10</div><div class="hi" style="pointer-events:auto;cursor:pointer" onclick="toggleMusic()" id="muteBtn">🎵 ON</div></div>
 <div id="msg"></div>
@@ -671,10 +671,14 @@ function build(){
   });
 }
 
-// Audio unlock — called on EVERY user interaction (iOS needs repeated resume attempts)
+// Audio unlock — called on EVERY user interaction (iOS Safari requires gesture-driven resume)
 function resumeAudio(){
-  if(!actx){try{actx=new(window.AudioContext||window.webkitAudioContext)}catch(e){return}}
-  if(actx.state!=='running')actx.resume().catch(function(){});
+  if(!actx){try{actx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return}}
+  if(actx.state!=='running'){
+    // iOS unlock: play a silent buffer in user gesture to unblock audio pipeline
+    try{var b=actx.createBuffer(1,1,actx.sampleRate),s=actx.createBufferSource();s.buffer=b;s.connect(actx.destination);s.start(0)}catch(e){}
+    actx.resume().catch(function(){});
+  }
 }
 // Seagull sound using Web Audio API
 function gullCry(){
@@ -710,7 +714,7 @@ function gullCry(){
 // === BLAYDON RACES (simple video game version) ===
 var musicOn=false,musicGain=null,musicGen=0;
 function initMusic(){
-  if(!actx)return;
+  if(!actx||actx.state!=='running'||musicGain)return;
   musicGain=actx.createGain();musicGain.connect(actx.destination);musicGain.gain.value=1;
 }
 function playTone(midi,start,dur,wave,vol){
@@ -743,7 +747,8 @@ function playFlute(midi,start,dur,vol){
   lfo.start(start);lfo.stop(start+dur+.05);
 }
 function playBlaydon(){
-  if(!musicOn)return;
+  if(!musicOn||!actx||actx.state!=='running')return;
+  if(!musicGain){initMusic();if(!musicGain)return;}
   var gen=musicGen,now=actx.currentTime;
   // Real Blaydon Races chorus (Sections B+B' from ABC notation, key G, 6/8 jig)
   // Source: trillian.mit.edu ABC archive. Gentle singalong at 90 BPM dotted-quarter.
@@ -832,7 +837,7 @@ function toggleMusic(){
   resumeAudio();
   if(!musicOn){
     musicOn=true;musicGen++;
-    initMusic();playBlaydon();
+    initMusic();if(musicGain)musicGain.gain.value=1;playBlaydon();
     document.getElementById('muteBtn').textContent='🎵 ON';
   } else {
     musicOn=false;musicGen++;
@@ -1781,6 +1786,10 @@ function init(){
     document.querySelectorAll('#dpad button').forEach(function(b){var k=b.dataset.k;
       b.addEventListener('touchstart',function(e){resumeAudio();e.preventDefault();e.stopPropagation();K[k]=true},{passive:false});
       b.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();K[k]=false},{passive:false})})}
+  // PLAY button — addEventListener is more reliable than onclick on iOS Safari for audio unlock
+  var pb=document.getElementById('playBtn');
+  pb.addEventListener('touchend',function(e){e.preventDefault();startGame()},{passive:false});
+  pb.addEventListener('click',function(){startGame()});
   ren.render(scene,cam)}
 
 function anim(){
@@ -2002,14 +2011,27 @@ function cw(){if(nb>=7&&ue.size>=8){setTimeout(function(){document.getElementByI
     c.position.set(player.position.x+(Math.random()-.5)*12,3+Math.random()*12,player.position.z+(Math.random()-.5)*12);
     c.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);scene.add(c)}},800)}}
 
-function startGame(){document.getElementById('start').style.display='none';document.getElementById('hud').style.display='flex';
-  resumeAudio();
-  musicOn=true;initMusic();
-  // Retry music start until AudioContext is running (iOS may need a moment)
-  var musicStarted=false;
-  function tryMusic(){if(musicStarted)return;if(actx&&actx.state==='running'){musicStarted=true;playBlaydon();}else{setTimeout(tryMusic,100);}}
-  tryMusic();
-  go=true;clk.start();hud();msg('Welcome to Cheveley Park! Explore and find Toby the dog! &#128054;',3500);
+function startGame(){
+  if(go)return;
+  // ---- iOS Audio Unlock (MUST happen before DOM changes) ----
+  if(!actx){try{actx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}
+  if(actx){
+    // Play silent buffer to unlock iOS Safari audio pipeline (must be in user gesture)
+    try{var b=actx.createBuffer(1,1,actx.sampleRate),s=actx.createBufferSource();s.buffer=b;s.connect(actx.destination);s.start(0)}catch(e){}
+    actx.resume().catch(function(){});
   }
+  // ---- Update DOM ----
+  document.getElementById('start').style.display='none';
+  document.getElementById('hud').style.display='flex';
+  musicOn=true;
+  // Start music once AudioContext is confirmed running
+  var musicStarted=false;
+  function beginMusic(){if(musicStarted)return;musicStarted=true;initMusic();if(musicGain)playBlaydon();}
+  if(actx&&actx.state==='running'){beginMusic();}
+  if(actx&&!musicStarted){actx.onstatechange=function(){if(actx.state==='running'&&musicOn)beginMusic()};}
+  function tryMusic(){if(musicStarted)return;if(actx&&actx.state==='running')beginMusic();else setTimeout(tryMusic,150);}
+  setTimeout(tryMusic,150);
+  go=true;clk.start();hud();msg('Welcome to Cheveley Park! Explore and find Toby the dog! &#128054;',3500);
+}
 init();anim();
 </script></body></html>
