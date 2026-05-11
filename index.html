@@ -5,8 +5,7 @@
 <title>Cheveley Park</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{overflow:hidden;background:#222;font-family:'Segoe UI',sans-serif;
-padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+body{overflow:hidden;background:#222;font-family:'Segoe UI',sans-serif}
 canvas{display:block;touch-action:none}
 #hud{position:fixed;top:0;left:0;width:100%;padding:8px 12px;
 background:linear-gradient(180deg,rgba(0,0,0,.7),transparent);
@@ -60,13 +59,14 @@ display:flex;flex-direction:column;align-items:center;justify-content:center;z-i
 .info b{color:#c9d1d9}
 #start button{padding:14px 44px;font-size:18px;background:#e84545;color:#fff;border:none;
 border-radius:10px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(232,69,69,.4)}
-#dpad{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom));left:16px;z-index:15;display:none;touch-action:manipulation}
+#dpad{position:fixed;bottom:calc(60px + env(safe-area-inset-bottom,0px));left:16px;
+width:176px;height:176px;z-index:15;display:none;touch-action:manipulation}
 #dpad button{position:absolute;width:56px;height:56px;border:none;border-radius:12px;
 background:rgba(255,255,255,.25);color:#fff;font-size:20px;font-weight:700;
 touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
-#dpad .u{left:60px;top:0}#dpad .d{left:60px;top:120px}
-#dpad .l{left:0;top:60px}#dpad .r{left:120px;top:60px}
-#dpad .j{left:60px;top:60px;background:rgba(232,69,69,.5)}
+#dpad .u{left:60px;bottom:120px}#dpad .d{left:60px;bottom:0}
+#dpad .l{left:0;bottom:60px}#dpad .r{left:120px;bottom:60px}
+#dpad .j{left:60px;bottom:60px;background:rgba(232,69,69,.5)}
 #win{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;
 flex-direction:column;align-items:center;justify-content:center;z-index:200;color:#fff;padding:20px;text-align:center}
 #win h1{font-size:clamp(28px,6vw,48px);color:#f7c948;margin-bottom:12px}
@@ -85,7 +85,7 @@ pointer-events:none;line-height:1.4;max-width:90%}
 padding:14px 30px;font-size:18px;background:#e84545;color:#fff;border:none;
 border-radius:12px;font-weight:700;display:none;z-index:25;
 box-shadow:0 4px 14px rgba(232,69,69,.5);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
-#stopBtn{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom));right:16px;width:64px;height:64px;border:none;
+#stopBtn{position:fixed;bottom:calc(60px + env(safe-area-inset-bottom,0px));right:16px;width:64px;height:64px;border:none;
 border-radius:50%;background:rgba(232,69,69,.7);color:#fff;font-size:13px;
 font-weight:700;display:none;z-index:25;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 </style></head><body>
@@ -821,7 +821,9 @@ function playBlaydon(){
 }
 function toggleMusic(){
   if(!musicOn){
-    musicOn=true;musicGen++;initMusic();playBlaydon();
+    musicOn=true;musicGen++;
+    if(actx&&actx.state==='suspended')actx.resume();
+    initMusic();playBlaydon();
     document.getElementById('muteBtn').textContent='🎵 ON';
   } else {
     musicOn=false;musicGen++;
@@ -1980,17 +1982,26 @@ function cw(){if(nb>=7&&ue.size>=8){setTimeout(function(){document.getElementByI
     c.position.set(player.position.x+(Math.random()-.5)*12,3+Math.random()*12,player.position.z+(Math.random()-.5)*12);
     c.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);scene.add(c)}},800)}}
 
-function unlockAudio(cb){
-  if(!actx)return;
-  // iOS Safari requires playing a buffer during a user gesture to unlock audio
-  var buf=actx.createBuffer(1,1,22050);
-  var src=actx.createBufferSource();
-  src.buffer=buf;src.connect(actx.destination);src.start(0);
-  if(actx.state==='suspended'){actx.resume().then(cb);}else{cb();}
-}
 function startGame(){document.getElementById('start').style.display='none';document.getElementById('hud').style.display='flex';
   try{actx=new(window.AudioContext||window.webkitAudioContext)}catch(e){}
-  unlockAudio(function(){musicOn=true;initMusic();setTimeout(playBlaydon,500);});
+  if(actx){
+    // iOS Safari unlock: play silent oscillator during user gesture
+    var osc=actx.createOscillator();var g=actx.createGain();
+    g.gain.value=0;osc.connect(g);g.connect(actx.destination);
+    osc.start(0);osc.stop(actx.currentTime+0.001);
+    // Resume and wait for running state before scheduling music
+    var started=false;
+    function beginMusic(){
+      if(started)return;started=true;
+      musicOn=true;initMusic();playBlaydon();
+    }
+    if(actx.state==='running'){beginMusic();}
+    else{
+      actx.resume();
+      actx.onstatechange=function(){if(actx.state==='running'){actx.onstatechange=null;beginMusic();}};
+      setTimeout(function(){if(actx.state==='running')beginMusic();},1500);
+    }
+  }
   go=true;clk.start();hud();msg('Welcome to Cheveley Park! Explore and find Toby the dog! &#128054;',3500);
   }
 init();anim();
