@@ -671,16 +671,15 @@ function build(){
   });
 }
 
-// Audio unlock — called on EVERY user interaction (iOS Safari requires gesture-driven resume)
+// Audio — called on EVERY user interaction (iOS Safari needs resume() in a gesture)
 function resumeAudio(){
   if(!actx){try{actx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return}}
-  if(actx.state!=='running'){
-    // iOS unlock: start a silent oscillator inside this user gesture to unblock audio
-    try{var o=actx.createOscillator(),g=actx.createGain();g.gain.value=0;o.connect(g);g.connect(actx.destination);o.start(0);o.stop(actx.currentTime+0.5)}catch(e){}
-    actx.resume().catch(function(){});
+  if(actx.state!=='running')actx.resume().catch(function(){});
+  // Queue music on context (even if suspended — nodes play when it resumes)
+  if(musicOn&&!musicGain&&actx){
+    musicGain=actx.createGain();musicGain.connect(actx.destination);musicGain.gain.value=1;
+    playBlaydon(true);
   }
-  // Auto-start music once context is running (catches deferred iOS unlock on next gesture)
-  if(musicOn&&actx.state==='running'&&!musicGain){initMusic();if(musicGain)playBlaydon();}
 }
 // Seagull sound using Web Audio API
 function gullCry(){
@@ -716,11 +715,11 @@ function gullCry(){
 // === BLAYDON RACES (simple video game version) ===
 var musicOn=false,musicGain=null,musicGen=0;
 function initMusic(){
-  if(!actx||actx.state!=='running'||musicGain)return;
+  if(!actx||musicGain)return;
   musicGain=actx.createGain();musicGain.connect(actx.destination);musicGain.gain.value=1;
 }
 function playTone(midi,start,dur,wave,vol){
-  if(!actx||actx.state!=='running'||!musicGain)return;
+  if(!actx||!musicGain)return;
   var freq=440*Math.pow(2,(midi-69)/12);
   var o=actx.createOscillator(),g=actx.createGain();
   o.type=wave;o.frequency.value=freq;
@@ -733,7 +732,7 @@ function playTone(midi,start,dur,wave,vol){
 }
 // Flute-like tone: sine wave, slow breath attack, gentle 5Hz vibrato
 function playFlute(midi,start,dur,vol){
-  if(!actx||actx.state!=='running'||!musicGain)return;
+  if(!actx||!musicGain)return;
   var freq=440*Math.pow(2,(midi-69)/12);
   var o=actx.createOscillator(),g=actx.createGain();
   o.type='sine';o.frequency.value=freq;
@@ -748,9 +747,9 @@ function playFlute(midi,start,dur,vol){
   o.start(start);o.stop(start+dur+.05);
   lfo.start(start);lfo.stop(start+dur+.05);
 }
-function playBlaydon(){
-  if(!musicOn||!actx||actx.state!=='running')return;
-  if(!musicGain){initMusic();if(!musicGain)return;}
+function playBlaydon(force){
+  if(!force&&(!musicOn||!actx||actx.state!=='running'))return;
+  if(!musicGain)return;
   var gen=musicGen,now=actx.currentTime;
   // Real Blaydon Races chorus (Sections B+B' from ABC notation, key G, 6/8 jig)
   // Source: trillian.mit.edu ABC archive. Gentle singalong at 90 BPM dotted-quarter.
@@ -836,10 +835,12 @@ function playBlaydon(){
   setTimeout(function(){if(musicOn&&musicGen===gen)playBlaydon()},loopTime*1000-50);
 }
 function toggleMusic(){
-  resumeAudio();
+  if(!actx){try{actx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return}}
+  if(actx.state!=='running')actx.resume().catch(function(){});
   if(!musicOn){
     musicOn=true;musicGen++;
-    initMusic();if(musicGain)musicGain.gain.value=1;playBlaydon();
+    if(!musicGain){musicGain=actx.createGain();musicGain.connect(actx.destination);}
+    musicGain.gain.value=1;playBlaydon(true);
     document.getElementById('muteBtn').textContent='🎵 ON';
   } else {
     musicOn=false;musicGen++;
