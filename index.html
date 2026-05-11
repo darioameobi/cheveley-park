@@ -25,12 +25,13 @@ animation:goalPop .4s ease-out;font-family:Impact,sans-serif}
 #goalOverlay .go-sub{font-size:22px;font-weight:700;margin-top:8px;
 text-shadow:0 2px 10px rgba(0,0,0,.5);animation:goalPop .4s ease-out .1s both}
 @keyframes goalPop{0%{transform:scale(3);opacity:0}60%{transform:scale(.95)}100%{transform:scale(1);opacity:1}}
-#tobyDialog{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+#tobyDialog{position:fixed;bottom:calc(100px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);
 background:rgba(0,0,0,.92);color:#fff;padding:16px 24px;border-radius:16px;
 font-size:15px;display:none;text-align:center;max-width:340px;z-index:30;
 border:2px solid #cc9944;line-height:1.5}
-#tobyDialog button{padding:8px 18px;margin:6px;border:none;border-radius:8px;
-font-size:14px;font-weight:600;cursor:pointer;background:#cc9944;color:#fff}
+#tobyDialog button{padding:12px 22px;margin:6px;border:none;border-radius:10px;
+font-size:16px;font-weight:600;cursor:pointer;background:#cc9944;color:#fff;
+touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 #tobyDialog button:hover{background:#ddaa55}
 #stickGame{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;
 flex-direction:column;align-items:center;justify-content:center;z-index:30;color:#fff;padding:20px}
@@ -81,12 +82,15 @@ background:rgba(0,0,0,.82);color:#fff;padding:8px 18px;border-radius:12px;
 font-size:14px;display:none;text-align:center;z-index:18;
 pointer-events:none;line-height:1.4;max-width:90%}
 #actHud b{color:#f7c948}
-#useBtn{position:fixed;bottom:18%;left:50%;transform:translateX(-50%);
+#useBtn{position:fixed;bottom:calc(18% + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);
 padding:14px 30px;font-size:18px;background:#e84545;color:#fff;border:none;
 border-radius:12px;font-weight:700;display:none;z-index:25;
 box-shadow:0 4px 14px rgba(232,69,69,.5);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 #stopBtn{position:fixed;bottom:calc(60px + env(safe-area-inset-bottom,0px));right:16px;width:64px;height:64px;border:none;
 border-radius:50%;background:rgba(232,69,69,.7);color:#fff;font-size:13px;
+font-weight:700;display:none;z-index:25;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+#kickBtn{position:fixed;bottom:calc(60px + env(safe-area-inset-bottom,0px));right:16px;width:80px;height:80px;border:none;
+border-radius:50%;background:rgba(50,200,50,.8);color:#fff;font-size:15px;
 font-weight:700;display:none;z-index:25;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 </style></head><body>
 <div id="start">
@@ -153,6 +157,7 @@ Collect all the <b>&#9917; footballs</b> and discover the equipment!<br><br>
 </div>
 <button id="useBtn" onclick="tapUse()">USE</button>
 <button id="stopBtn" onclick="endAct()">STOP</button>
+<button id="kickBtn" ontouchstart="mobileKick()">&#9917; KICK</button>
 <div id="win"><h1>&#127881; CHEVELEY PARK &#127881;</h1>
 <p>You explored the whole of Cheveley Park!</p>
 <p>&#128021; Toby: Woof woof! Best birthday ever!</p>
@@ -171,7 +176,7 @@ Collect all the <b>&#9917; footballs</b> and discover the equipment!<br><br>
     RIGHT (south/+Z): Fenced play area
     FAR EAST: Zipwire, molecular frame, basket swing
 ================================================================*/
-var scene,cam,ren,clk,player,toby,unc,uncGreeted=false;
+var scene,cam,ren,clk,player,toby,unc,uncGreeted=false,uncDeclineT=0;
 var swingSeats={};
 var K={},go=false,md=false,mx0=0,my0=0;
 var cT=Math.PI/2,cP=0.5,cD=7,vy=0,og=true;
@@ -917,7 +922,7 @@ function mkCardCollector(){
   ch(g,B(.20,.08,.28,0x333333),.14,.04,.03);         // right shoe
   return g;
 }
-var cardCollector,ccGreeted=false;
+var cardCollector,ccGreeted=false,ccDeclineT=0;
 var cardGameActive=false,cardsCollected=[],cardStartTime=0,cardBestTime=0;
 var cardSprites=[];
 var NUFC_PLAYERS=[
@@ -985,13 +990,13 @@ function updateCardHud(){
   var mins=Math.floor(elapsed/60),secs=elapsed%60;
   ch2.innerHTML='&#127183; '+cardsCollected.length+'/11 &nbsp; &#9201; '+mins+':'+(secs<10?'0':'')+secs;
 }
-function cardDecline(){hideTobyDialog();msg('No worries! Come back anytime.',1500);}
+function cardDecline(){hideTobyDialog();ccDeclineT=Date.now();msg('No worries! Come back anytime.',1500);}
 function uncPenaltyYes(){
   hideTobyDialog();
   var mugaInt=INTS.find(function(i){return i[0]==='muga';});
   if(mugaInt)startAct(mugaInt);
 }
-function uncPenaltyNo(){hideTobyDialog();msg('UNC: No worries kidda, go enjoy the park! &#9917;',2000);}
+function uncPenaltyNo(){hideTobyDialog();uncDeclineT=Date.now();msg('UNC: No worries kidda, go enjoy the park! &#9917;',2000);}
 function uncResetArms(){
   if(!unc)return;
   unc.children[10].position.set(-.27,1.05,0);
@@ -1148,6 +1153,9 @@ function throwStick(){
   },600);
 }
 
+function mobileKick(){
+  K[' ']=true;setTimeout(function(){K[' ']=false},150);
+}
 function stickTap(dir){
   if(tobyState!=='throwing'||stickPhase!=='mash')return;
   if(dir==='left'&&stickLastKey!=='left'){
@@ -1320,7 +1328,7 @@ function startAct(int){
   var btn=document.getElementById('useBtn');if(btn)btn.style.display='none';
   var ah=document.getElementById('actHud'),htm='';
   var mob='ontouchstart' in window;
-  if(act==='goal'){htm='&#9917; Watch the ball — <b>'+(mob?'&#11014;':'SPACE')+'</b> to volley!'+(mob?'':' <b>E</b> to leave.');
+  if(act==='goal'){htm='&#9917; Watch the ball — <b>'+(mob?'KICK':'SPACE')+'</b> to volley!'+(mob?'':' <b>E</b> to leave.');
     player.position.set(-2.2,0,-12.9);player.rotation.y=-Math.PI/2;
     mkVolleyGoal();
     // FIFA-style camera: behind and above Player
@@ -1348,7 +1356,13 @@ function startAct(int){
     htm='&#128170; '+(mob?'Tap <b>&#9650; / &#9660;</b>':'Press <b>UP/DOWN</b>')+' to do '+gymName+'! 10 reps = big muscles!';}
   else if(act==='rocker'){htm='&#128012; Boing boing!'+(mob?'':' <b>E</b> to stop.');}
   ah.innerHTML=htm;ah.style.display='block';
-  if(mob)document.getElementById('stopBtn').style.display='block';
+  if(mob){
+    document.getElementById('stopBtn').style.display='block';
+    if(act==='goal'){
+      document.getElementById('kickBtn').style.display='block';
+      document.getElementById('stopBtn').style.bottom='calc(150px + env(safe-area-inset-bottom,0px))';
+    }
+  }
   // Toby cheers from the sidelines
   if(toby&&Math.random()<.6)setTimeout(function(){msg('&#128054; Toby: Woof! Go on!',1800)},800);
 }
@@ -1366,7 +1380,8 @@ function endAct(){
   player.children[12].position.set(.12,.27,0);player.children[12].rotation.x=0;
   player.children[13].position.set(-.12,.04,.02);player.children[13].rotation.x=0;
   player.children[14].position.set(.12,.04,.02);player.children[14].rotation.x=0;
-  var sb=document.getElementById('stopBtn');if(sb)sb.style.display='none';
+  var sb=document.getElementById('stopBtn');if(sb){sb.style.display='none';sb.style.bottom='';}
+  var kb=document.getElementById('kickBtn');if(kb)kb.style.display='none';
   if(actData.swGroup){scene.remove(actData.swGroup);actData.swGroup=null;}
   // Reset swing seat and chains to rest position
   var ss=swingSeats[actData.id];
@@ -1814,7 +1829,7 @@ function anim(){
     if(!act&&!cardGameActive&&tDist<2.5&&!document.getElementById('tobyDialog').style.display.match('block')){
       tobyState='greeting';
       showTobyDialog('&#128054; Woof woof! I\'m <b>Toby</b>!<br>What would you like to do?',
-        [['&#127934; Throw a stick!','startStickGame()'],['&#128694; Follow me!','tobyFollow()'],['&#128075; Not now','hideTobyDialog()']]);
+        [['&#127934; Throw a stick!','startStickGame()'],['&#128694; Follow me!','tobyFollow()'],['&#128075; Not now','dismissToby()']]);
     }
   }
   else if(tobyState==='following'){
@@ -1889,10 +1904,10 @@ function anim(){
   if(unc&&!act&&!uncGreeted&&!cardGameActive){
     var udx=player.position.x-unc.position.x,udz=player.position.z-unc.position.z;
     var uDist=Math.sqrt(udx*udx+udz*udz);
-    if(uDist<2.8&&!document.getElementById('tobyDialog').style.display.match('block')){
+    if(uDist<2.8&&!document.getElementById('tobyDialog').style.display.match('block')&&Date.now()-uncDeclineT>10000){
       uncGreeted=true;
       showTobyDialog('&#129464; <b>UNC</b>: Alright! Fancy a game of volleys? I\'ll cross it in!',
-        [['&#9917; Let\'s go!','uncPenaltyYes()'],['&#128078; Nah','uncPenaltyNo()']]);
+        [['&#9917; Let\'s go!','uncPenaltyYes()'],['&#128075; Not now','uncPenaltyNo()']]);
     }
     if(uDist<10)unc.rotation.y=Math.atan2(udx,udz)+Math.PI; // face Player when nearby
   }
@@ -1903,7 +1918,7 @@ function anim(){
   if(cardCollector&&!act&&!ccGreeted&&!cardGameActive){
     var cdx=player.position.x-cardCollector.position.x,cdz=player.position.z-cardCollector.position.z;
     var cDist=Math.sqrt(cdx*cdx+cdz*cdz);
-    if(cDist<2.8&&!document.getElementById('tobyDialog').style.display.match('block')){
+    if(cDist<2.8&&!document.getElementById('tobyDialog').style.display.match('block')&&Date.now()-ccDeclineT>10000){
       ccGreeted=true;
       showTobyDialog('&#127183; <b>The Card Collector</b>: Alright young man! Fancy collecting the full Newcastle United squad? 11 cards hidden around the park — how fast can you find them all?',
         [['&#127183; Yes!','startCardGame()'],['&#128075; Not now','cardDecline()']]);
@@ -1985,22 +2000,23 @@ function cw(){if(nb>=7&&ue.size>=8){setTimeout(function(){document.getElementByI
 function startGame(){document.getElementById('start').style.display='none';document.getElementById('hud').style.display='flex';
   try{actx=new(window.AudioContext||window.webkitAudioContext)}catch(e){}
   if(actx){
-    // iOS Safari unlock: play silent oscillator during user gesture
-    var osc=actx.createOscillator();var g=actx.createGain();
-    g.gain.value=0;osc.connect(g);g.connect(actx.destination);
-    osc.start(0);osc.stop(actx.currentTime+0.001);
-    // Resume and wait for running state before scheduling music
+    // iOS Safari unlock: play silent buffer + oscillator during user gesture
+    var buf=actx.createBuffer(1,44100,44100);
+    var src=actx.createBufferSource();src.buffer=buf;src.connect(actx.destination);src.start(0);
+    var osc=actx.createOscillator();var gn=actx.createGain();
+    gn.gain.value=0;osc.connect(gn);gn.connect(actx.destination);
+    osc.start(0);osc.stop(actx.currentTime+0.05);
+    actx.resume();
+    // Poll until AudioContext is running, then start music
     var started=false;
     function beginMusic(){
       if(started)return;started=true;
       musicOn=true;initMusic();playBlaydon();
     }
-    if(actx.state==='running'){beginMusic();}
-    else{
-      actx.resume();
-      actx.onstatechange=function(){if(actx.state==='running'){actx.onstatechange=null;beginMusic();}};
-      setTimeout(function(){if(actx.state==='running')beginMusic();},1500);
-    }
+    var poll=setInterval(function(){
+      if(actx.state==='running'){clearInterval(poll);beginMusic();}
+    },50);
+    setTimeout(function(){clearInterval(poll);beginMusic();},3000);
   }
   go=true;clk.start();hud();msg('Welcome to Cheveley Park! Explore and find Toby the dog! &#128054;',3500);
   }
